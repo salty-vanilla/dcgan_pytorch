@@ -18,9 +18,9 @@ def main():
     parser.add_argument('--save_steps', '-ss',
                         type=int, default=10)
     parser.add_argument('--lr_d',
-                        type=float, default=1e-3)
+                        type=float, default=2e-4)
     parser.add_argument('--lr_g',
-                        type=float, default=1e-3)
+                        type=float, default=2e-4)
     parser.add_argument('--ngf', '-ngf',
                         type=int, default=64)
     parser.add_argument('--ndf', '-ndf',
@@ -31,12 +31,11 @@ def main():
                         type=str, default='logs')
     parser.add_argument('--no-cuda',
                         dest='use_cuda',
-                        action='store_true', default=False,
+                        action='store_false', default=True,
                         help='disables CUDA training')
     args = parser.parse_args()
 
     device = torch.device("cuda" if args.use_cuda else "cpu")
-
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
         datasets.MNIST('./data', train=True, download=True,
@@ -52,7 +51,12 @@ def main():
     generator = Generator(args.latent_dim, args.ngf)
     discriminator = Discriminator(args.ndf)
     gan = DCGAN(generator, discriminator, device)
+    gan.init_params()
 
+    if args.use_cuda:
+        generator.cuda() 
+        discriminator.cuda()
+                   
     gan.fit(train_loader,
             nb_epoch=args.nb_epoch,
             lr_d=args.lr_d,

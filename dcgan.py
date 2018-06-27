@@ -17,8 +17,8 @@ class DCGAN:
 
     def fit(self, data_loader,
             nb_epoch=100,
-            lr_d=1e-3,
-            lr_g=1e-3,
+            lr_d=2e-4,
+            lr_g=2e-4,
             save_steps=10,
             logdir='logs'):
         os.makedirs(logdir, exist_ok=True)
@@ -29,34 +29,38 @@ class DCGAN:
                            betas=(0.5, 0.999))
 
         criterion = nn.BCELoss()
-        for epoch in range(1, nb_epoch):
+        criterion = criterion.to(self.device)
+        for epoch in range(1, nb_epoch+1):
             print('\nepoch %d / %d' % (epoch, nb_epoch))
+            self.discriminator.train()
+            self.generator.train()
             start = time.time()
             for iter_, x in enumerate(data_loader):
                 x = x[0]
                 # update discriminator
-                self.discriminator.zero_grad()
+                opt_d.zero_grad()
                 x_real = x.to(self.device)
                 bs = x_real.shape[0]
-                t_real = torch.full((bs, ), 1, device=self.device)
                 d_x_real = self.discriminator(x_real)
+                t_real = torch.full((bs, ), 1, device=self.device)
                 loss_d_real = criterion(d_x_real, t_real)
-                loss_d_real.backward()
 
                 z = torch.randn((bs, self.generator.input_dim))
+                z = z.to(self.device)
                 x_fake = self.generator(z)
                 t_fake = torch.full((bs, ), 0, device=self.device)
-                d_x_fake = self.discriminator(x_fake)
+                d_x_fake = self.discriminator(x_fake.detach())
                 loss_d_fake = criterion(d_x_fake, t_fake)
-                loss_d_fake.backward()
 
                 loss_d = loss_d_real + loss_d_fake
+                loss_d.backward()
                 opt_d.step()
 
                 # update generator
-                self.generator.zero_grad()
+                opt_g.zero_grad()
                 x_fake = self.generator(z)
                 d_x_fake = self.discriminator(x_fake)
+                t_real = torch.full((bs, ), 1, device=self.device)
                 loss_g = criterion(d_x_fake, t_real)
                 loss_g.backward()
                 opt_g.step()
@@ -66,8 +70,10 @@ class DCGAN:
                       end='\r')
 
             if epoch % save_steps == 0:
+                # self.generator.eval()
                 z = torch.randn((data_loader.batch_size,
-                                 self.generator.input_dim))
+                                 self.generator.input_dim),
+                                device=self.device )
                 x = self.generate(z)
 
                 dst_path = os.path.join(logdir,
@@ -78,6 +84,19 @@ class DCGAN:
                            os.path.join(logdir, 'generator_%d.pth' % epoch))
                 torch.save(self.discriminator.state_dict(),
                            os.path.join(logdir, 'discriminator_%d.pth' % epoch))
+    
+    def init_params(self):
+        def  _weights_init(m):
+            if isinstance(m, nn.Conv2d):
+                m.weight.data.normal_(0, 0.02)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.ConvTranspose2d):
+                m.weight.data.normal_(0, 0.02)
+                m.bias.data.zero_()
+            elif isinstance(m, nn.Linear):
+                m.weight.data.normal_(0, 0.02)
+        self.generator.apply(_weights_init)
+        self.discriminator.apply(_weights_init)
 
     def generate(self, z):
         with torch.no_grad():

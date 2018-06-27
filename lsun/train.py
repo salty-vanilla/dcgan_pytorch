@@ -11,6 +11,7 @@ from dcgan import DCGAN
 
 def main():
     parser = argparse.ArgumentParser(description='LSUN')
+    parser.add_argument('image_dir')
     parser.add_argument('--batch_size', '-bs',
                         type=int, default=64)
     parser.add_argument('--nb_epoch', '-e',
@@ -39,7 +40,7 @@ def main():
 
     kwargs = {'num_workers': 1, 'pin_memory': True} if args.use_cuda else {}
     train_loader = torch.utils.data.DataLoader(
-        datasets.LSUN('data',
+        datasets.LSUN(args.image_dir,
                       classes=['bedroom_train'],
                       transform=transforms.Compose([
                           transforms.Resize(64),
@@ -53,6 +54,7 @@ def main():
     generator = Generator(args.latent_dim, args.ngf)
     discriminator = Discriminator(args.ndf)
     gan = DCGAN(generator, discriminator, device)
+    gan.init_params()
 
     gan.fit(train_loader,
             nb_epoch=args.nb_epoch,
